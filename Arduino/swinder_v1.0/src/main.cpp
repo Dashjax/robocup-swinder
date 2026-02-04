@@ -67,6 +67,7 @@ Encoder encoder(RE_A_PIN, RE_B_PIN);
 Solenoid solenoid = Solenoid();
 
 // Function definition
+void startupAnimation();
 void choosePreset();
 void valSelect();
 void confirmScreen();

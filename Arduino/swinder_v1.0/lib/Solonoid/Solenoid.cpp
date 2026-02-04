@@ -9,7 +9,7 @@ void Solenoid::begin(Preset preset) {
 }
 
 SolenoidError Solenoid::setLength(uint32_t length) {
-    if (length > MAX_LENGTH || length < 0) {
+    if (length > MAX_LENGTH) {
         return SolenoidError::VALUE_ERROR;
     }
     this->_length = length;
@@ -17,7 +17,7 @@ SolenoidError Solenoid::setLength(uint32_t length) {
 }
 
 SolenoidError Solenoid::setRadius(uint32_t radius) {
-    if (radius > MAX_LENGTH || radius < 0) {
+    if (radius > MAX_LENGTH) {
         return SolenoidError::VALUE_ERROR;
     }
     this->_radius = radius;
@@ -25,7 +25,7 @@ SolenoidError Solenoid::setRadius(uint32_t radius) {
 }
 
 SolenoidError Solenoid::setInductance(uint32_t inductance) {
-    if (inductance > MAX_INDUCTANCE || inductance < 0) {
+    if (inductance > MAX_INDUCTANCE) {
         return SolenoidError::VALUE_ERROR;
     }
     this->_inductance = inductance;
@@ -54,7 +54,9 @@ WireGauge Solenoid::getGauge() {
 }
 
 uint32_t Solenoid::getTurns() {
-    this->updateTurns();
+    if (!_override) {
+        this->updateTurns();
+    }
     return _numTurns;
 }
 
@@ -106,6 +108,19 @@ uint32_t Solenoid::turnsPerPass() {
     return (_length / _gauge) * 100;
 }
 
+void Solenoid::turnsOverride(int32_t turns) {
+    if (turns == -1) {
+        _override = false;
+        return;
+    }
+    _override = true;
+    this->_numTurns = turns;
+}
+
+bool Solenoid::getOverride() {
+    return _override;
+}
+
 
 String Solenoid::gaugeString() {
     switch(_gauge) {
@@ -149,5 +164,9 @@ uint32_t Solenoid::gaugeDiameter() {
 // PRIVATE
 
 void Solenoid::updateTurns() {
+    if (_radius == 0 || _length == 0 || _inductance == 0) {
+        this->_numTurns = 0;
+        return;
+    }
     this->_numTurns = round(sqrt(((_inductance * _length * 100000000) / (_radius * _radius * K))) * UT_SCALING_FACTOR);
 }

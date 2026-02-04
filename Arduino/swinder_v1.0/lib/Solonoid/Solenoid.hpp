@@ -155,6 +155,20 @@ public:
      */
     uint32_t turnsPerPass();
 
+    /**
+     * @brief Overrides current turn count
+     * 
+     * @param turns number of turns, input -1 to reset to calculated value
+     */
+    void turnsOverride(int32_t turns);
+
+    /**
+     * @brief Getter for the status of override
+     * 
+     * @returns status of override
+     */
+    bool getOverride();
+
 private:
     /**
      * @brief Calculates the number of turns required for solenoid
@@ -168,6 +182,7 @@ private:
     uint64_t _inductance = 0;
     WireGauge _gauge = WireGauge::AWG24;
     uint64_t _numTurns = 0;
+    bool _override = false;
 };
 
 #endif
