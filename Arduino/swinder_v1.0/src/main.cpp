@@ -5,9 +5,9 @@
 
 // Debug mode
 // Enables serial
-#define DEBUG false
+#define DEBUG true
 
-// Solonoid spin motor
+// Solonoid spin motor M2
 #define SS_STEP_PIN 36
 #define SS_DIR_PIN 35
 #define SS_FAULT_PIN 30
@@ -15,7 +15,7 @@
 // Set SS direction
 #define SS_DIR_SET 0 // This should be used as true for clockwise, false for counterclockwise
 
-// Carriage control motor
+// Carriage control motor M1
 #define CC_STEP_PIN 39
 #define CC_DIR_PIN 38
 #define CC_FAULT_PIN 29
@@ -77,11 +77,13 @@ void motorFault(String);
 void stepCC();
 void stepSS();
 void stepBoth();
-void pauseSpin();
 void completionScreen();
+bool pauseSpin();
 String formatVal(uint32_t, uint32_t);
+String formatTurns(uint32_t);
 uint32_t valEditor(uint32_t, uint32_t);
 WireGauge gaugeEditor(WireGauge);
+int32_t turnsEditor(uint32_t);
 
 
 void setup() {
@@ -308,11 +310,19 @@ void valSelect() {
           break;
         case 4: // Confirmation Screen
           lcd.setCursor(0, 0);
+          lcd.print("Turns");
+          lcd.setCursor(0, 1);
+          lcd.print(formatTurns(solenoid.getTurns()));
+          if (solenoid.getOverride()) {
+            lcd.print(" OVERRIDE");
+          }
+          break;
+        case 5: // Confirmation Screen
+          lcd.setCursor(0, 0);
           lcd.print("Turns: ");
           lcd.print(String(solenoid.getTurns()));
           lcd.setCursor(0, 1);
-          lcd.print("Confirm");
-          break;
+          lcd.print("Confirm?");
       }
       screenChange = false;
     }
@@ -333,7 +343,10 @@ void valSelect() {
         case 3: // Gauge
           solenoid.setGauge(gaugeEditor(solenoid.getGauge()));
           break;
-        case 4: // Turns
+        case 4:
+          solenoid.turnsOverride(turnsEditor(solenoid.getTurns()));
+          break;
+        case 5: // Turns
           task = Tasks::ConfirmScreen;
           return;
       }
@@ -344,7 +357,7 @@ void valSelect() {
     // Read Encoder
     long reNewPosition = encoder.read() / 4;
     int16_t dir = reNewPosition - reOldPosition;
-    if (dir > 0 && screenIndex < 4) {
+    if (dir > 0 && screenIndex < 5) {
       screenIndex += 1;
       screenChange = true;
     } else if (dir < 0 && screenIndex > 0) {
@@ -413,31 +426,29 @@ uint32_t valEditor(uint32_t num, uint32_t max) {
         screenChange = true;
       }
     } else { // Selecting digit
-      if (dir > 0 && cursor_idx < maxLength) {
-        cursor_idx++;
-        // Skip .
-        if (cursor_idx == maxLength - 3) {
+      if (dir > 0) {
+        if (cursor_idx < maxLength - 1) {
           cursor_idx++;
-        }
-        // Jump to done
-        if (cursor_idx == maxLength) {
-          cursor_idx = 11;
-        } else {
           scaler /= 10;
+          // Skip .
+          if (cursor_idx == maxLength - 3) {
+            cursor_idx++;
+          }
+        } else if (cursor_idx == maxLength - 1) { // Jump to done
+          cursor_idx = 11;
         }
         
         screenChange = true;
-      } else if (dir < 0 && cursor_idx > 0) {
-        cursor_idx--;
-        // Skip .
-        if (cursor_idx == maxLength - 3) {
+      } else if (dir < 0) {
+        if (cursor_idx > 0 && cursor_idx < maxLength) {
           cursor_idx--;
-        }
-        // Jump from done
-        if (cursor_idx == 10) {
-          cursor_idx = maxLength;
-        } else {
           scaler *= 10;
+          // Skip .
+          if (cursor_idx == maxLength - 3) {
+            cursor_idx--;
+          }
+        } else if (cursor_idx == 11) { // Jump from done
+          cursor_idx = maxLength - 1;
         }
         
         screenChange = true;
@@ -483,7 +494,7 @@ WireGauge gaugeEditor(WireGauge gauge) {
   while (true) {
     // Read button
     if (digitalRead(RE_BUTTON_PIN) == LOW) {
-      delay(BUTTON_DELAY);
+      delay(BUTTON_DELAY * 2);
       if (cursorIndex == 11) {
         lcd.cursor_off();
         lcd.blink_off();
@@ -526,6 +537,96 @@ WireGauge gaugeEditor(WireGauge gauge) {
       lcd.setCursor(cursorIndex, 1);
       screenUpdate = false;
     }
+  }
+}
+
+int32_t turnsEditor(uint32_t turns) {
+  uint32_t scaler = 1;
+  uint8_t maxLength = 5;
+  uint8_t cursor_idx = maxLength - 1;
+  uint32_t max = 10000;
+  long reOldPosition = encoder.read() / 4;
+  bool editingDigit = false;
+  bool screenChange = true;
+
+  
+  lcd.setCursor(6, 1);
+  lcd.print("Done Reset");
+  lcd.setCursor(cursor_idx, 1);
+  lcd.cursor_on();
+
+  while (true) {
+    
+    // Read button
+    if (digitalRead(RE_BUTTON_PIN) == LOW) {
+      delay(BUTTON_DELAY);
+      if (cursor_idx == 6) {
+        lcd.cursor_off();
+        lcd.blink_off();
+        return turns;
+      } else if (cursor_idx == 11) {
+        lcd.cursor_off();
+        lcd.blink_off();
+        return -1;
+      } else {
+        editingDigit = !editingDigit;
+        if (editingDigit) {
+          lcd.blink_on();
+        } else {
+          lcd.blink_off();
+        }
+        delay(BUTTON_DELAY);
+      }
+    }
+
+    // Read Encoder
+    long reNewPosition = encoder.read() / 4;
+    int16_t dir = reNewPosition - reOldPosition;
+    if (editingDigit) { // Editing digit
+      if (dir > 0 && turns + scaler <= max) {
+        turns += scaler;
+        screenChange = true;
+      } else if (dir < 0 && turns - scaler >= 0) {
+        turns -= scaler;
+        screenChange = true;
+      }
+    } else { // Selecting digit
+      if (dir > 0) {
+        if (cursor_idx < maxLength - 1) {
+          cursor_idx++;
+          scaler /= 10;
+        } else if (cursor_idx == maxLength - 1) { // Jump to done
+          cursor_idx = 6;
+        } else if (cursor_idx == 6) { // Jump to reset
+          cursor_idx = 11;
+        }
+        
+        screenChange = true;
+      } else if (dir < 0) {
+        if (cursor_idx > 0 && cursor_idx < maxLength) {
+          cursor_idx--;
+          scaler *= 10;
+        } else if (cursor_idx == 6) { // Jump from done
+          cursor_idx = maxLength - 1;
+        } else if (cursor_idx == 11) { // Jump from reset
+          cursor_idx = 6;
+        }
+        
+        screenChange = true;
+      }
+    }
+    reOldPosition = reNewPosition;
+
+    // Update screen
+    if (screenChange) {
+      lcd.setCursor(0, 1);
+      lcd.print(formatTurns(turns));
+      lcd.setCursor(cursor_idx, 1);
+      screenChange = false;
+    }
+    
+    // Stability delay
+    delay(1);
   }
 }
 
@@ -650,7 +751,9 @@ void spin() {
     if (digitalRead(RE_BUTTON_PIN) == LOW) {
       delay(BUTTON_DELAY);
 
-      pauseSpin();
+      if (pauseSpin()) {
+        return;
+      }
 
       // Reset display after pause
       lcd.clear();
@@ -746,7 +849,7 @@ Pause screen
 -Rotate Counterclockwise: Move Cursor Left
 -Press: Confirm Resume/Restart
 */
-void pauseSpin() {
+bool pauseSpin() {
   uint8_t cursorIndex = 0;
   long reOldPosition = encoder.read() / 4;
 
@@ -774,23 +877,26 @@ void pauseSpin() {
         // Wake motors and return
         digitalWrite(CC_SLEEP_PIN, HIGH);
         digitalWrite(SS_SLEEP_PIN, HIGH);
-        return;
+        delay(100);
+        return false;
       } else {
         // Return to value editor
         task = Tasks::ValEdit;
-        return;
+        return true;
       }
     }
 
     // Read encoder
     long reNewPosition = encoder.read() / 4;
     int16_t dir = reNewPosition - reOldPosition;
-    if (dir > 0 && cursorIndex == 0) {
+    if (dir > 0 && cursorIndex != 8) {
       cursorIndex = 8;
-    } else if (dir < 0 && cursorIndex == 8) {
+    } else if (dir < 0 && cursorIndex != 0) {
       cursorIndex = 0;
     }
+    lcd.setCursor(cursorIndex, 1);
     reOldPosition = reNewPosition;
+    Serial.println(cursorIndex);
 
     // Stability delay
     delay(1);
@@ -911,5 +1017,16 @@ String formatVal(uint32_t num, uint32_t max) {
   returnString += numberString.substring(0, numberString.length() - 2);
   returnString += ".";
   returnString += numberString.substring(numberString.length() - 2);
+  return returnString;
+}
+
+String formatTurns(uint32_t turns) {
+  String returnString = "";
+  String numberString = String(turns);
+
+  for (size_t i = 0; i < 5 - numberString.length(); i++) {
+    returnString += "0";
+  }
+  returnString += numberString;
   return returnString;
 }

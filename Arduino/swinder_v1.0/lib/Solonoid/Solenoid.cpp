@@ -109,7 +109,8 @@ uint32_t Solenoid::turnsPerPass() {
 }
 
 void Solenoid::turnsOverride(int32_t turns) {
-    if (turns == -1) {
+    this->updateTurns();
+    if (turns == -1 || turns == _numTurns) {
         _override = false;
         return;
     }
