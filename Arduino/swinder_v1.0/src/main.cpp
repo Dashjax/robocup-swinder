@@ -1,7 +1,9 @@
 #include <Arduino.h>
 #include <Solenoid.hpp>
 #include <Encoder.h>
-#include <LiquidCrystal_I2C.h>
+#include <Wire.h>
+#include <hd44780.h>
+#include <hd44780ioClass/hd44780_I2Cexp.h>
 
 // Debug mode
 // Enables serial
@@ -33,7 +35,7 @@
 #define LS_END_PIN 6
 
 // Misc constants
-#define VERSION "V1.2"
+#define VERSION "V1.3"
 #define BUTTON_DELAY 200
 #define CARRIAGE_OFFSET 0 // 0 cm
 #define PADDING 10 // Potentially needed error correction value to add/subtract from the start and end; 0.001 accuracy
@@ -58,7 +60,7 @@ Tasks task = Tasks::ChoosePreset;
 
 
 // Define LCD
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+hd44780_I2Cexp lcd(0x27, 16, 2);
 
 // Define Rotary Encoder
 Encoder encoder(RE_A_PIN, RE_B_PIN);
@@ -394,7 +396,7 @@ uint32_t valEditor(uint32_t num, uint32_t max) {
   lcd.setCursor(11, 1);
   lcd.print("Done");
   lcd.setCursor(cursor_idx, 1);
-  lcd.cursor_on();
+  lcd.cursor();
 
   while (true) {
     
@@ -402,15 +404,15 @@ uint32_t valEditor(uint32_t num, uint32_t max) {
     if (digitalRead(RE_BUTTON_PIN) == LOW) {
       delay(BUTTON_DELAY * 2);
       if (cursor_idx == 11) {
-        lcd.cursor_off();
-        lcd.blink_off();
+        lcd.noCursor();
+        lcd.noBlink();
         return num;
       } else {
         editingDigit = !editingDigit;
         if (editingDigit) {
-          lcd.blink_on();
+          lcd.blink();
         } else {
-          lcd.blink_off();
+          lcd.noBlink();
         }
       }
     }
@@ -490,22 +492,22 @@ WireGauge gaugeEditor(WireGauge gauge) {
   lcd.setCursor(11, 1);
   lcd.print("Done");
   lcd.setCursor(cursorIndex, 1);
-  lcd.cursor_on();
+  lcd.cursor();
 
   while (true) {
     // Read button
     if (digitalRead(RE_BUTTON_PIN) == LOW) {
       delay(BUTTON_DELAY * 2);
       if (cursorIndex == 11) {
-        lcd.cursor_off();
-        lcd.blink_off();
+        lcd.noCursor();
+        lcd.noBlink();
         return gauge;
       } else {
         editingGauge = !editingGauge;
         if (editingGauge) {
-          lcd.blink_on();
+          lcd.blink();
         } else {
-          lcd.blink_off();
+          lcd.noBlink();
         }
       }
     }
@@ -554,7 +556,7 @@ int32_t turnsEditor(uint32_t turns) {
   lcd.setCursor(6, 1);
   lcd.print("Done Reset");
   lcd.setCursor(cursor_idx, 1);
-  lcd.cursor_on();
+  lcd.cursor();
 
   while (true) {
     
@@ -562,19 +564,19 @@ int32_t turnsEditor(uint32_t turns) {
     if (digitalRead(RE_BUTTON_PIN) == LOW) {
       delay(BUTTON_DELAY);
       if (cursor_idx == 6) {
-        lcd.cursor_off();
-        lcd.blink_off();
+        lcd.noCursor();
+        lcd.noBlink();
         return turns;
       } else if (cursor_idx == 11) {
-        lcd.cursor_off();
-        lcd.blink_off();
+        lcd.noCursor();
+        lcd.noBlink();
         return -1;
       } else {
         editingDigit = !editingDigit;
         if (editingDigit) {
-          lcd.blink_on();
+          lcd.blink();
         } else {
-          lcd.blink_off();
+          lcd.noBlink();
         }
         delay(BUTTON_DELAY);
       }
@@ -647,15 +649,15 @@ void confirmScreen() {
   lcd.setCursor(0, 1);
   lcd.print("Y/N");
   lcd.setCursor(cursor_idx, 1);
-  lcd.cursor_on();
-  lcd.blink_on();
+  lcd.cursor();
+  lcd.blink();
 
   while (true) {
     // Read button
     if (digitalRead(RE_BUTTON_PIN) == LOW) {
       delay(BUTTON_DELAY);
-      lcd.blink_off();
-      lcd.cursor_off();
+      lcd.noBlink();
+      lcd.noCursor();
 
       if (cursor_idx == 0) {
         task = Tasks::Spin;
@@ -807,7 +809,7 @@ void spin() {
     // Update % completion
     
     uint8_t newPercentComplete = (stepCount * 100) / SS_STEPS;
-    if (false && newPercentComplete != oldPercentComplete) {
+    if (newPercentComplete != oldPercentComplete) {
       lcd.setCursor(0, 1);
       lcd.print(String(newPercentComplete) + "%");
       oldPercentComplete = newPercentComplete;
@@ -897,15 +899,15 @@ bool pauseScreen(String msg, bool cc, bool ss) {
   lcd.setCursor(0, 1);
   lcd.print("Resume  Restart");
   lcd.setCursor(cursorIndex, 1);
-  lcd.cursor_on();
-  lcd.blink_on();
+  lcd.cursor();
+  lcd.blink();
 
   while (true) {
     // Read Button
     if (digitalRead(RE_BUTTON_PIN) == LOW) {
       delay(BUTTON_DELAY);
-      lcd.blink_off();
-      lcd.cursor_off();
+      lcd.noBlink();
+      lcd.noCursor();
       if (cursorIndex == 0) {
         // Wake motors and return
         if (cc) {digitalWrite(CC_SLEEP_PIN, HIGH);}
