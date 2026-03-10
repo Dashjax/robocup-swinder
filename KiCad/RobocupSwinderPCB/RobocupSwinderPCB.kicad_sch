@@ -6614,7 +6614,7 @@
 		)
 		(uuid "25425d98-145c-4d03-9fa0-b52a1f2adbdb")
 	)
-	(label "LSStart_Pin_7"
+	(label "LSStart_Pin_5"
 		(at 163.83 63.5 0)
 		(effects
 			(font
@@ -6644,7 +6644,7 @@
 		)
 		(uuid "29e30b20-c042-4236-b37c-98c324e35a87")
 	)
-	(label "LSStart_Pin_7"
+	(label "LSStart_Pin_5"
 		(at 261.62 199.39 180)
 		(effects
 			(font
@@ -6654,7 +6654,7 @@
 		)
 		(uuid "2a9c2525-86c8-4af9-8ea1-fbda4f535ce6")
 	)
-	(label "LSEnd_Pin_8"
+	(label "LSEnd_Pin_6"
 		(at 261.62 215.9 180)
 		(effects
 			(font
@@ -6754,7 +6754,7 @@
 		)
 		(uuid "6c88c290-f639-4eb6-853e-1498129d9fff")
 	)
-	(label "LSEnd_Pin_8"
+	(label "LSEnd_Pin_6"
 		(at 163.83 66.04 0)
 		(effects
 			(font

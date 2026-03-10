@@ -5,7 +5,7 @@
 
 // Debug mode
 // Enables serial
-#define DEBUG true
+#define DEBUG false
 
 // Solonoid spin motor M2
 #define SS_STEP_PIN 36
@@ -13,7 +13,7 @@
 #define SS_FAULT_PIN 30
 #define SS_SLEEP_PIN 37
 // Set SS direction
-#define SS_DIR_SET 0 // This should be used as true for clockwise, false for counterclockwise
+#define SS_DIR_SET 1 // This should be used as true for clockwise, false for counterclockwise
 
 // Carriage control motor M1
 #define CC_STEP_PIN 39
@@ -29,14 +29,14 @@
 #define RE_B_PIN 23
 
 // Limit switches
-#define LS_START_PIN 7
-#define LS_END_PIN 8
+#define LS_START_PIN 5
+#define LS_END_PIN 6
 
 // Misc constants
-#define VERSION "V1.0"
+#define VERSION "V1.2"
 #define BUTTON_DELAY 200
-#define CARRIAGE_OFFSET 500 // 0.5 cm
-#define PADDING 5 // Potentially needed error correction value to add/subtract from the start and end; 0.001 accuracy
+#define CARRIAGE_OFFSET 0 // 0 cm
+#define PADDING 10 // Potentially needed error correction value to add/subtract from the start and end; 0.001 accuracy
 #define MOTOR_DELAY 800 //ps
 
 enum Tasks {
@@ -72,13 +72,13 @@ void choosePreset();
 void valSelect();
 void confirmScreen();
 void spin();
-void zeroCarriage();
+bool zeroCarriage();
 void motorFault(String);
 void stepCC();
 void stepSS();
 void stepBoth();
 void completionScreen();
-bool pauseSpin();
+bool pauseScreen(String, bool, bool);
 String formatVal(uint32_t, uint32_t);
 String formatTurns(uint32_t);
 uint32_t valEditor(uint32_t, uint32_t);
@@ -107,8 +107,8 @@ void setup() {
   solenoid.begin(Preset::None);
 
   // Initialize Limit Switches
-  pinMode(LS_START_PIN, INPUT);
-  pinMode(LS_END_PIN, INPUT);
+  pinMode(LS_START_PIN, INPUT_PULLDOWN);
+  pinMode(LS_END_PIN, INPUT_PULLDOWN);
 
   // Initialize CC Motor
   pinMode(CC_DIR_PIN, OUTPUT);
@@ -152,6 +152,7 @@ void loop() {
   -End
   -Restart
   */
+  
   switch (task) {
     case Tasks::ChoosePreset:
       #if DEBUG
@@ -688,11 +689,14 @@ Major spin task
 */
 void spin() {
   // Start by zeroing carriage
-  zeroCarriage();
+  if (zeroCarriage()) {
+    return;
+  }
+  
   
   // Calculate necessary values
   const uint32_t SS_STEPS = solenoid.getTurns() * SS_STEPS_PER_REVOLUTION;
-  const uint32_t CC_DISTANCE_PER_REVOLUTION = (solenoid.gaugeDiameter() * 100) / DISTANCE_PER_STEP;
+  const uint32_t CC_DISTANCE_PER_REVOLUTION = (solenoid.gaugeDiameter() * 2 * 100) / DISTANCE_PER_STEP;
   const uint32_t SS_STEP_PER_CC_STEP = (CC_STEPS_PER_REVOLUTION * 1000) / CC_DISTANCE_PER_REVOLUTION;
 
   uint32_t stepCount = 0; // Step count
@@ -738,6 +742,8 @@ void spin() {
   #if DEBUG
     long startTime = micros();
   #endif
+
+  // MAIN SPIN
   while (stepCount < SS_STEPS) {
     // Check for motor faults
     if (digitalRead(CC_FAULT_PIN) == LOW) {
@@ -747,11 +753,23 @@ void spin() {
       motorFault("SS");
     }
 
+    if (stepCount == SS_STEPS_PER_REVOLUTION * 5) {
+      if (pauseScreen("Check Turns", true, true)) {
+        return;
+      }
+      // Reset display after pause
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Percent Complete");
+      lcd.setCursor(0, 1);
+      lcd.print(String(oldPercentComplete) + "%");
+    }
+
     // Read button
     if (digitalRead(RE_BUTTON_PIN) == LOW) {
       delay(BUTTON_DELAY);
 
-      if (pauseSpin()) {
+      if (pauseScreen("Wind Paused", true, true)) {
         return;
       }
 
@@ -789,7 +807,7 @@ void spin() {
     // Update % completion
     
     uint8_t newPercentComplete = (stepCount * 100) / SS_STEPS;
-    if (newPercentComplete != oldPercentComplete) {
+    if (false && newPercentComplete != oldPercentComplete) {
       lcd.setCursor(0, 1);
       lcd.print(String(newPercentComplete) + "%");
       oldPercentComplete = newPercentComplete;
@@ -808,7 +826,7 @@ void spin() {
 }
 
 // Moves carriage towards 0 position till the start limit switch is hit
-void zeroCarriage() {
+bool zeroCarriage() {
   // Setup Screen
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -820,9 +838,23 @@ void zeroCarriage() {
   digitalWrite(CC_SLEEP_PIN, HIGH);
   delay(20);
 
+  
+  // Set direction
+  digitalWrite(CC_DIR_PIN, CC_DIR_SET);
+  // Move slightly forwards
+  uint16_t num_steps = 0;
+  while (num_steps < CC_STEPS_PER_REVOLUTION / 2) {
+    // Check for fault
+    if (digitalRead(CC_FAULT_PIN) == LOW) {
+      motorFault("CC");
+    }
+    stepCC();
+    num_steps++;
+  }
+
   // Set direction
   digitalWrite(CC_DIR_PIN, !CC_DIR_SET);
-
+  // Step back to zero
   while (true) {
     // Check for fault
     if (digitalRead(CC_FAULT_PIN) == LOW) {
@@ -833,10 +865,11 @@ void zeroCarriage() {
     if (digitalRead(LS_START_PIN) == HIGH || digitalRead(RE_BUTTON_PIN) == LOW) {
       lcd.clear();
       lcd.setCursor(0, 0);
-      lcd.print("Zeroing Complete");
       delay(BUTTON_DELAY);
-
-      return;
+      if (pauseScreen("Zeroing Complete", true, false)) {
+        return true;
+      }
+      return false;
     } else {
       stepCC();
     }
@@ -849,18 +882,18 @@ Pause screen
 -Rotate Counterclockwise: Move Cursor Left
 -Press: Confirm Resume/Restart
 */
-bool pauseSpin() {
+bool pauseScreen(String msg, bool cc, bool ss) {
   uint8_t cursorIndex = 0;
   long reOldPosition = encoder.read() / 4;
 
   // Sleep Motors
-  digitalWrite(CC_SLEEP_PIN, LOW);
-  digitalWrite(SS_SLEEP_PIN, LOW);
+  if (cc) {digitalWrite(CC_SLEEP_PIN, LOW);}
+  if (ss) {digitalWrite(SS_SLEEP_PIN, LOW);}
 
   // Setup Screen
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Paused");
+  lcd.print(msg);
   lcd.setCursor(0, 1);
   lcd.print("Resume  Restart");
   lcd.setCursor(cursorIndex, 1);
@@ -875,8 +908,8 @@ bool pauseSpin() {
       lcd.cursor_off();
       if (cursorIndex == 0) {
         // Wake motors and return
-        digitalWrite(CC_SLEEP_PIN, HIGH);
-        digitalWrite(SS_SLEEP_PIN, HIGH);
+        if (cc) {digitalWrite(CC_SLEEP_PIN, HIGH);}
+        if (ss) {digitalWrite(SS_SLEEP_PIN, HIGH);}
         delay(100);
         return false;
       } else {
@@ -979,16 +1012,16 @@ void completionScreen() {
   Total delay: 1600ms
 */
 void startupAnimation() {
-  String s = "Robojackets!";
+  String s = "Swinder!";
   lcd.clear();
-  lcd.setCursor(2, 0);
+  lcd.setCursor(3, 0);
   for (size_t i = 0; i < s.length(); i++) {
     lcd.print(s.charAt(i));
-    delay(100);
+    delay(150);
   }
   lcd.setCursor(5, 1);
   lcd.print(VERSION);
-  delay(500);
+  delay(700);
 }
 
 // Assumes 2 decimal place precision

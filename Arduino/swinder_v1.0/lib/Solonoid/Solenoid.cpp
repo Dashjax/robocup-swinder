@@ -63,9 +63,9 @@ uint32_t Solenoid::getTurns() {
 void Solenoid::setPreset(Preset preset) {
     switch (preset) {
         case Preset::A:
-            this->setLength((uint32_t) 500); // 5cm
-            this->setRadius((uint32_t) 50); // 0.5cm
-            this->setInductance((uint32_t) 4000); // 40mH
+            this->setLength((uint32_t) 425); // 5cm
+            this->setRadius((uint32_t) 65); // 0.65cm
+            this->setInductance((uint32_t) 400); // 4mH
             this->setGauge(WireGauge::AWG24);
         break;
         case Preset::B:
@@ -110,7 +110,7 @@ uint32_t Solenoid::turnsPerPass() {
 
 void Solenoid::turnsOverride(int32_t turns) {
     this->updateTurns();
-    if (turns == -1 || turns == _numTurns) {
+    if (turns < 0 || uint(turns) == _numTurns) {
         _override = false;
         return;
     }
