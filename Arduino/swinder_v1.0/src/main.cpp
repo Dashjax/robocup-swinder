@@ -37,8 +37,9 @@
 // Misc constants
 #define VERSION "V1.3"
 #define BUTTON_DELAY 200
-#define CARRIAGE_OFFSET 0 // 0 cm
-#define PADDING 10 // Potentially needed error correction value to add/subtract from the start and end; 0.001 accuracy
+#define CARRIAGE_OFFSET 100 // 0.001 cm
+#define START_PADDING 150 // Potentially needed error correction value to add/subtract from the start and end; 0.001 cm accuracy
+#define END_PADDING 200
 #define MOTOR_DELAY 800 //ps
 
 enum Tasks {
@@ -715,7 +716,7 @@ void spin() {
   digitalWrite(CC_DIR_PIN, CC_DIR_SET);
 
   // Apply starting offset
-  while (carriagePosition < CARRIAGE_OFFSET + PADDING) {
+  while (carriagePosition < CARRIAGE_OFFSET) {
     // Check for motor fault
     if (digitalRead(CC_FAULT_PIN) == LOW) {
       motorFault("CC");
@@ -727,6 +728,10 @@ void spin() {
   // Set new offset position as 0 position
   carriagePosition = 0;
 
+  if (pauseScreen("Zeroing Complete", true, false)) {
+    return;
+  }
+  
   // Wake SS motor
   digitalWrite(SS_SLEEP_PIN, HIGH);
   delay(20);
@@ -744,6 +749,8 @@ void spin() {
   #if DEBUG
     long startTime = micros();
   #endif
+
+  int recent_reverse = SS_STEPS_PER_REVOLUTION * 5;
 
   // MAIN SPIN
   while (stepCount < SS_STEPS) {
@@ -783,14 +790,19 @@ void spin() {
       lcd.print(String(oldPercentComplete) + "%");
     }
 
+    if (recent_reverse) {
+      recent_reverse--;
+    }
     // Reverse carriage
-    if (carriagePosition > int(solenoid.getLength()) * 10 + PADDING) {
+    if (!recent_reverse && carriagePosition > int(solenoid.getLength()) * 10 - END_PADDING) {
       digitalWrite(CC_DIR_PIN, !CC_DIR_SET);
       direction = false;
+      recent_reverse = SS_STEPS_PER_REVOLUTION * 5;
     }
-    if (carriagePosition < PADDING) {
+    if (!recent_reverse && carriagePosition < START_PADDING) {
       digitalWrite(CC_DIR_PIN, CC_DIR_SET);
       direction = true;
+      recent_reverse = SS_STEPS_PER_REVOLUTION * 5;
     }
 
     // Step motor(s)
@@ -868,9 +880,6 @@ bool zeroCarriage() {
       lcd.clear();
       lcd.setCursor(0, 0);
       delay(BUTTON_DELAY);
-      if (pauseScreen("Zeroing Complete", true, false)) {
-        return true;
-      }
       return false;
     } else {
       stepCC();

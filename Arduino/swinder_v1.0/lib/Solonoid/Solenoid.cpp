@@ -63,7 +63,7 @@ uint32_t Solenoid::getTurns() {
 void Solenoid::setPreset(Preset preset) {
     switch (preset) {
         case Preset::A:
-            this->setLength((uint32_t) 425); // 5cm
+            this->setLength((uint32_t) 450); // 5cm
             this->setRadius((uint32_t) 65); // 0.65cm
             this->setInductance((uint32_t) 400); // 4mH
             this->setGauge(WireGauge::AWG24);
