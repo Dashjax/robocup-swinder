@@ -15,6 +15,7 @@ rtic-monotonics = { version = "1.0.0", features = ["cortex-m-systick"] }
 lcd1602-driver = "0.2.0"
 hd44780-driver = "0.4.0"
 imxrt-hal = "0.5.9"
+rotary-encoder-embedded = "0.4.0"
 
 [dependencies.teensy4-bsp]
 version = "0.4.5"
